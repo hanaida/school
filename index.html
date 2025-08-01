@@ -5,7 +5,34 @@
   <title>학교대항전 캔버스</title>
   <style>
     body { font-family: sans-serif; text-align: center; }
-    canvas { image-rendering: pixelated; border: 1px solid #000; cursor: crosshair; }
+    .canvas-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+    canvas { 
+      image-rendering: pixelated; 
+      border: 1px solid #000; 
+      cursor: crosshair; 
+      display: block;
+    }
+    .hex-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .hex-cell {
+      position: absolute;
+      font-size: 12px;
+      font-weight: bold;
+      line-height: 1.1;
+      text-align: center;
+      transform: translate(-50%, -50%);
+      color: white;
+      text-shadow: 0 0 2px black;
+    }
     #fileInput, .modeBtn {
       font-size: 20px;
       padding: 10px 20px;
@@ -41,7 +68,12 @@
   <input type="file" id="fileInput" accept="image/*"><br><br>
   <button class="modeBtn" id="mode1Btn">픽셀 클릭 모드</button>
   <button class="modeBtn" id="mode2Btn">전체 HEX 표시 모드</button><br><br>
-  <canvas id="canvas" width="1024" height="1024"></canvas>
+
+  <div class="canvas-wrapper">
+    <canvas id="canvas" width="1024" height="1024"></canvas>
+    <div class="hex-overlay" id="hexOverlay"></div>
+  </div>
+
   <div id="colorInfo">
     <span id="colorBox"></span>
     <span id="colorText">픽셀을 클릭하면 HEX 코드가 표시됩니다.</span>
@@ -51,6 +83,7 @@
     const fileInput = document.getElementById('fileInput');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    const hexOverlay = document.getElementById('hexOverlay');
     const colorBox = document.getElementById('colorBox');
     const colorText = document.getElementById('colorText');
     const mode1Btn = document.getElementById('mode1Btn');
@@ -67,7 +100,6 @@
       const file = e.target.files[0];
       if (!file) return;
 
-      // imgbb 백그라운드 업로드
       const formData = new FormData();
       formData.append("image", file);
       fetch(`https://api.imgbb.com/1/upload?key=${imgbbApiKey}`, {
@@ -80,7 +112,6 @@
       })
       .catch(err => console.error("업로드 실패:", err));
 
-      // 로컬 미리보기 및 도트 변환
       const img = new Image();
       img.src = URL.createObjectURL(file);
       img.onload = function() {
@@ -97,6 +128,7 @@
 
     function drawMainCanvas() {
       if (!currentImg || !pixelData) return;
+
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = size;
       tempCanvas.height = size;
@@ -106,6 +138,8 @@
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+
+      hexOverlay.innerHTML = '';
 
       if (currentMode === 1 && selectedPixel) {
         const scale = canvas.width / size;
@@ -120,36 +154,31 @@
       }
 
       if (currentMode === 2) {
-        drawAllHex();
+        drawAllHexOverlay();
       }
     }
 
-    function drawAllHex() {
+    function drawAllHexOverlay() {
       const scale = canvas.width / size;
-      ctx.font = `${scale/4}px Arial`; // 글자 크기 축소
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-
       for (let y = 0; y < size; y++) {
         for (let x = 0; x < size; x++) {
           const idx = (y * size + x) * 4;
           const r = pixelData[idx];
           const g = pixelData[idx + 1];
           const b = pixelData[idx + 2];
-          const hex = "#" + [r,g,b]
-            .map(v => v.toString(16).padStart(2,"0"))
-            .join("")
-            .toUpperCase();
+          const hex = "#" + [r,g,b].map(v => v.toString(16).padStart(2,"0")).join("").toUpperCase();
+
+          const div = document.createElement('div');
+          div.className = 'hex-cell';
+          div.innerHTML = hex.slice(0, 4) + "<br>" + hex.slice(4);
+
+          div.style.left = `${(x + 0.5) * scale}px`;
+          div.style.top = `${(y + 0.5) * scale}px`;
 
           const brightness = (r*0.299 + g*0.587 + b*0.114);
-          ctx.fillStyle = brightness > 128 ? "black" : "white";
+          div.style.color = brightness > 128 ? "black" : "white";
 
-          const cx = x * scale + scale / 2;
-          const cy = y * scale + scale / 2;
-
-          // 두 줄로 나눠 표시 (#RRG / GGB)
-          ctx.fillText(hex.slice(0, 4), cx, cy - scale/8);
-          ctx.fillText(hex.slice(4), cx, cy + scale/8);
+          hexOverlay.appendChild(div);
         }
       }
     }
