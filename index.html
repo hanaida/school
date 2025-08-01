@@ -6,21 +6,22 @@
   <style>
     body { font-family: sans-serif; text-align: center; }
     canvas { image-rendering: pixelated; border: 1px solid #000; cursor: crosshair; }
-    #fileInput {
-      font-size: 24px;
-      padding: 12px 24px;
+    #fileInput, .modeBtn {
+      font-size: 20px;
+      padding: 10px 20px;
+      margin: 5px;
       border: 2px solid #333;
       border-radius: 8px;
       background-color: #f0f0f0;
       cursor: pointer;
     }
-    #fileInput:hover { background-color: #e0e0e0; }
+    #fileInput:hover, .modeBtn:hover { background-color: #e0e0e0; }
     #colorInfo {
       margin-top: 20px;
       display: inline-flex;
       align-items: center;
       gap: 15px;
-      font-size: 32px;
+      font-size: 28px;
       font-weight: bold;
       background-color: #222;
       color: white;
@@ -38,27 +39,35 @@
 <body>
   <h1>학교대항전 캔버스</h1>
   <input type="file" id="fileInput" accept="image/*"><br><br>
+  <button class="modeBtn" id="mode1Btn">픽셀 클릭 모드</button>
+  <button class="modeBtn" id="mode2Btn">전체 HEX 표시 모드</button><br><br>
   <canvas id="canvas" width="1024" height="1024"></canvas>
   <div id="colorInfo">
     <span id="colorBox"></span>
     <span id="colorText">픽셀을 클릭하면 HEX 코드가 표시됩니다.</span>
   </div>
+
   <script>
     const fileInput = document.getElementById('fileInput');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const colorBox = document.getElementById('colorBox');
     const colorText = document.getElementById('colorText');
+    const mode1Btn = document.getElementById('mode1Btn');
+    const mode2Btn = document.getElementById('mode2Btn');
+
     const size = 32;
-    let pixelData = null; 
-    let currentImg = null; 
-    let selectedPixel = null; 
+    let pixelData = null;
+    let currentImg = null;
+    let selectedPixel = null;
+    let currentMode = 1;
     const imgbbApiKey = "3df1cfb7a65e1f0ff0062422dc0b9ab3";
 
     fileInput.addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
 
+      // imgbb 백그라운드 업로드
       const formData = new FormData();
       formData.append("image", file);
       fetch(`https://api.imgbb.com/1/upload?key=${imgbbApiKey}`, {
@@ -71,6 +80,7 @@
       })
       .catch(err => console.error("업로드 실패:", err));
 
+      // 로컬 미리보기 및 도트 변환
       const img = new Image();
       img.src = URL.createObjectURL(file);
       img.onload = function() {
@@ -86,16 +96,18 @@
     });
 
     function drawMainCanvas() {
-      if (!currentImg) return;
+      if (!currentImg || !pixelData) return;
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = size;
       tempCanvas.height = size;
       const tctx = tempCanvas.getContext('2d');
       tctx.drawImage(currentImg, 0, 0, size, size);
+
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
-      if (selectedPixel) {
+
+      if (currentMode === 1 && selectedPixel) {
         const scale = canvas.width / size;
         ctx.strokeStyle = "red";
         ctx.lineWidth = 4;
@@ -106,10 +118,39 @@
           scale
         );
       }
+
+      if (currentMode === 2) {
+        drawAllHex();
+      }
+    }
+
+    function drawAllHex() {
+      const scale = canvas.width / size;
+      ctx.font = `${scale/3}px Arial`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const idx = (y * size + x) * 4;
+          const r = pixelData[idx];
+          const g = pixelData[idx + 1];
+          const b = pixelData[idx + 2];
+          const hex = "#" + [r,g,b].map(v => v.toString(16).padStart(2,"0")).join("").toUpperCase();
+
+          // 가독성을 위해 밝기 계산 후 색상 선택
+          const brightness = (r*0.299 + g*0.587 + b*0.114);
+          ctx.fillStyle = brightness > 128 ? "black" : "white";
+
+          const cx = x * scale + scale / 2;
+          const cy = y * scale + scale / 2;
+          ctx.fillText(hex, cx, cy);
+        }
+      }
     }
 
     canvas.addEventListener('click', function(e) {
-      if (!pixelData) return;
+      if (!pixelData || currentMode !== 1) return;
       const rect = canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
@@ -120,10 +161,23 @@
       const g = pixelData[idx + 1];
       const b = pixelData[idx + 2];
       const a = pixelData[idx + 3];
-      const hex = "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("").toUpperCase();
+      const hex = "#" + [r,g,b].map(v => v.toString(16).padStart(2,"0")).join("").toUpperCase();
       colorBox.style.backgroundColor = hex;
       colorText.textContent = `(${pixelX}, ${pixelY}) → ${hex} (A=${a})`;
       selectedPixel = { x: pixelX, y: pixelY };
+      drawMainCanvas();
+    });
+
+    mode1Btn.addEventListener('click', () => {
+      currentMode = 1;
+      colorText.textContent = "픽셀을 클릭하면 HEX 코드가 표시됩니다.";
+      drawMainCanvas();
+    });
+
+    mode2Btn.addEventListener('click', () => {
+      currentMode = 2;
+      colorText.textContent = "전체 HEX 코드 표시 모드";
+      selectedPixel = null;
       drawMainCanvas();
     });
   </script>
