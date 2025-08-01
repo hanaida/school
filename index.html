@@ -126,7 +126,7 @@
 
     function drawAllHex() {
       const scale = canvas.width / size;
-      ctx.font = `${scale/3}px Arial`;
+      ctx.font = `${scale/4}px Arial`; // 글자 크기 축소
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
@@ -136,15 +136,20 @@
           const r = pixelData[idx];
           const g = pixelData[idx + 1];
           const b = pixelData[idx + 2];
-          const hex = "#" + [r,g,b].map(v => v.toString(16).padStart(2,"0")).join("").toUpperCase();
+          const hex = "#" + [r,g,b]
+            .map(v => v.toString(16).padStart(2,"0"))
+            .join("")
+            .toUpperCase();
 
-          // 가독성을 위해 밝기 계산 후 색상 선택
           const brightness = (r*0.299 + g*0.587 + b*0.114);
           ctx.fillStyle = brightness > 128 ? "black" : "white";
 
           const cx = x * scale + scale / 2;
           const cy = y * scale + scale / 2;
-          ctx.fillText(hex, cx, cy);
+
+          // 두 줄로 나눠 표시 (#RRG / GGB)
+          ctx.fillText(hex.slice(0, 4), cx, cy - scale/8);
+          ctx.fillText(hex.slice(4), cx, cy + scale/8);
         }
       }
     }
