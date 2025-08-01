@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>학교대항전 캔버스</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; }
+    canvas { image-rendering: pixelated; border: 1px solid #000; cursor: crosshair; }
+    #fileInput {
+      font-size: 24px;
+      padding: 12px 24px;
+      border: 2px solid #333;
+      border-radius: 8px;
+      background-color: #f0f0f0;
+      cursor: pointer;
+    }
+    #fileInput:hover { background-color: #e0e0e0; }
+    #colorInfo {
+      margin-top: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 15px;
+      font-size: 32px;
+      font-weight: bold;
+      background-color: #222;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 12px;
+    }
+    #colorBox {
+      width: 50px;
+      height: 50px;
+      border: 2px solid #000;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>학교대항전 캔버스</h1>
+  <input type="file" id="fileInput" accept="image/*"><br><br>
+  <canvas id="canvas" width="1024" height="1024"></canvas>
+  <div id="colorInfo">
+    <span id="colorBox"></span>
+    <span id="colorText">픽셀을 클릭하면 HEX 코드가 표시됩니다.</span>
+  </div>
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const colorBox = document.getElementById('colorBox');
+    const colorText = document.getElementById('colorText');
+    const size = 32;
+    let pixelData = null; 
+    let currentImg = null; 
+    let selectedPixel = null; 
+    const imgbbApiKey = "3df1cfb7a65e1f0ff0062422dc0b9ab3";
+
+    fileInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("image", file);
+      fetch(`https://api.imgbb.com/1/upload?key=${imgbbApiKey}`, {
+        method: "POST",
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) console.log("업로드 URL:", data.data.url);
+      })
+      .catch(err => console.error("업로드 실패:", err));
+
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = function() {
+        currentImg = img;
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = size;
+        tempCanvas.height = size;
+        const tctx = tempCanvas.getContext('2d');
+        tctx.drawImage(img, 0, 0, size, size);
+        pixelData = tctx.getImageData(0, 0, size, size).data;
+        drawMainCanvas();
+      };
+    });
+
+    function drawMainCanvas() {
+      if (!currentImg) return;
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = size;
+      tempCanvas.height = size;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.drawImage(currentImg, 0, 0, size, size);
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+      if (selectedPixel) {
+        const scale = canvas.width / size;
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(
+          selectedPixel.x * scale,
+          selectedPixel.y * scale,
+          scale,
+          scale
+        );
+      }
+    }
+
+    canvas.addEventListener('click', function(e) {
+      if (!pixelData) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const pixelX = Math.floor(x / (canvas.width / size));
+      const pixelY = Math.floor(y / (canvas.height / size));
+      const idx = (pixelY * size + pixelX) * 4;
+      const r = pixelData[idx];
+      const g = pixelData[idx + 1];
+      const b = pixelData[idx + 2];
+      const a = pixelData[idx + 3];
+      const hex = "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("").toUpperCase();
+      colorBox.style.backgroundColor = hex;
+      colorText.textContent = `(${pixelX}, ${pixelY}) → ${hex} (A=${a})`;
+      selectedPixel = { x: pixelX, y: pixelY };
+      drawMainCanvas();
+    });
+  </script>
+</body>
+</html>
